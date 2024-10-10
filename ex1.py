@@ -1,21 +1,25 @@
 import requests
 
-# Define the URL for the GET request
-url = "https://enter.online/telefoane/smartphone-uri"
+def fetch_html(url):
+    """
+    Fetches the HTML content from the specified URL.
 
-# Make the HTTP GET request
-response = requests.get(url)
+    Parameters:
+    url (str): The URL to send the GET request to.
 
-# Check if the request was successful
-if response.status_code == 200:
-    # Get the HTML content from the response
-    html_content = response.text
-    html_status = "Success"
-else:
-    # If the request failed, show the status code
-    html_content = f"Request failed with status code: {response.status_code}"
-    html_status = "Failed"
+    Returns:
+    tuple: A tuple containing the HTML content (str) and the status message (str).
+    """
+    try:
+        # Make the HTTP GET request
+        response = requests.get(url)
 
-# Now print the status and the first 500 characters of the content
-print(html_status)
-print(html_content)  # Display first 500 characters of the HTML content
+        # Check if the request was successful
+        if response.status_code == 200:
+            html_content = response.text
+            return html_content, "Success"
+        else:
+            return None, f"Request failed with status code: {response.status_code}"
+    except requests.RequestException as e:
+        # Handle connection issues or request errors
+        return None, f"Request failed due to an error: {str(e)}"
