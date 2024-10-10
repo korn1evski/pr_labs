@@ -3,13 +3,13 @@ from bs4 import BeautifulSoup
 
 def extract_product_info(html_content):
     """
-    Extracts product names and prices from the given HTML content.
+    Extracts product names, prices, and links from the given HTML content.
 
     Parameters:
     html_content (str): The HTML content to parse.
 
     Returns:
-    list: A list of dictionaries with product names and prices.
+    list: A list of dictionaries with product names, prices, and links.
     """
     soup = BeautifulSoup(html_content, 'html.parser')
     products = []
@@ -20,11 +20,13 @@ def extract_product_info(html_content):
         price_new_tag = product.find('span', class_='price-new')  # New price
         price_old_tag = product.find('span', class_='price-old')  # Old price (optional)
         discount_tag = product.find('span', class_='discount')  # Discount (optional)
+        link_tag = product.find('a', href=True)  # Product link
 
-        # Extract name and prices if available
-        if name_tag and price_new_tag:
+        # Extract name, prices, and link if available
+        if name_tag and price_new_tag and link_tag:
             name = name_tag.text.strip()
             price_new = price_new_tag.text.strip()
+            link = link_tag['href']  # Extract the link from the 'href' attribute
 
             # Get the old price and discount if they exist
             price_old = price_old_tag.text.strip() if price_old_tag else None
@@ -35,7 +37,8 @@ def extract_product_info(html_content):
                 'name': name,
                 'price_new': price_new,
                 'price_old': price_old,
-                'discount': discount
+                'discount': discount,
+                'link': link
             }
 
             products.append(product_info)
@@ -43,6 +46,8 @@ def extract_product_info(html_content):
     return products
 
 
+
+# URL for the products page
 url = "https://enter.online/telefoane/smartphone-uri"
 
 # Fetch the HTML content using the function from ex1.py
@@ -63,6 +68,8 @@ if html_content and status == "Success":
                 print(f"Old Price: {product['price_old']}")
             if product['discount']:
                 print(f"Discount: {product['discount']}")
+            if product['link']:
+                print(f"Link: {product['link']}")
             print("-" * 40)
     else:
         print("No products found.")
