@@ -1,20 +1,35 @@
 from bs4 import BeautifulSoup
 
 
+def clean_price(price_str):
+    """
+    Cleans the price string by removing non-numeric characters and converts it to an integer.
+
+    Parameters:
+    price_str (str): The price string to clean.
+
+    Returns:
+    int: The cleaned price as an integer.
+    """
+    # Remove all non-numeric characters
+    price_str = ''.join([ch for ch in price_str if ch.isdigit()])
+    return int(price_str) if price_str else 0
+
+
 def extract_product_info(html_content):
     """
-    Extracts product names, prices, and links from the given HTML content.
+    Extracts and cleans product names, prices, and links from the given HTML content.
 
     Parameters:
     html_content (str): The HTML content to parse.
 
     Returns:
-    list: A list of dictionaries with product names, prices, and links.
+    list: A list of dictionaries with cleaned and validated product names, prices, and links.
     """
     soup = BeautifulSoup(html_content, 'html.parser')
     products = []
 
-    # Find product items based on the structure you provided
+    # Find product items based on the structure
     for product in soup.find_all('div', class_='grid-item'):
         name_tag = product.find('span', class_='product-title')  # Product name
         price_new_tag = product.find('span', class_='price-new')  # New price
@@ -24,15 +39,13 @@ def extract_product_info(html_content):
 
         # Extract name, prices, and link if available
         if name_tag and price_new_tag and link_tag:
-            name = name_tag.text.strip()
-            price_new = price_new_tag.text.strip()
-            link = link_tag['href']  # Extract the link from the 'href' attribute
+            name = name_tag.text.strip()  # Clean name (remove extra spaces)
+            price_new = clean_price(price_new_tag.text)  # Clean new price and convert to integer
+            price_old = clean_price(price_old_tag.text) if price_old_tag else None  # Clean old price
+            discount = discount_tag.text.strip() if discount_tag else None  # Clean discount
+            link = link_tag['href']  # Extract the link
 
-            # Get the old price and discount if they exist
-            price_old = price_old_tag.text.strip() if price_old_tag else None
-            discount = discount_tag.text.strip() if discount_tag else None
-
-            # Store product info in a dictionary
+            # Store cleaned product info in a dictionary
             product_info = {
                 'name': name,
                 'price_new': price_new,
