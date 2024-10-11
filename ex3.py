@@ -1,9 +1,8 @@
 import requests
 from bs4 import BeautifulSoup
 import re
-
-# Import fetch_html from ex1.py
-from ex1 import fetch_html
+from ex1 import fetch_html  # Import fetch_html from ex1.py
+from ex8 import CustomSerializer  # Import CustomSerializer from ex8.py
 
 
 def clean_price(price_str):
@@ -16,8 +15,7 @@ def clean_price(price_str):
     Returns:
     float: The cleaned price as a float.
     """
-    # Remove any non-numeric characters except for the decimal point
-    cleaned_price = re.sub(r'[^\d.]', '', price_str)
+    cleaned_price = re.sub(r'[^\d.]', '', price_str)  # Remove any non-numeric characters except for the decimal point
     return float(cleaned_price)
 
 
@@ -31,12 +29,8 @@ def clean_book_data(book_data):
     Returns:
     dict: A cleaned dictionary with whitespaces removed and price as a float.
     """
-    # Remove whitespaces from the name
     book_data['name'] = book_data['name'].strip()
-
-    # Ensure price is a float by cleaning it
-    book_data['price'] = clean_price(book_data['price'])
-
+    book_data['price'] = clean_price(book_data['price'])  # Ensure price is a float by cleaning it
     return book_data
 
 
@@ -55,12 +49,9 @@ def get_product_details(product_url):
     if product_html and status == "Success":
         soup = BeautifulSoup(product_html, 'html.parser')
 
-        # Find the table with class "table table-striped"
         product_table = soup.find('table', class_='table table-striped')
-
         product_details = {}
 
-        # Extract data from the table
         if product_table:
             rows = product_table.find_all('tr')
             for row in rows:
@@ -68,13 +59,13 @@ def get_product_details(product_url):
                 td = row.find('td').text.strip()
                 product_details[th] = td
 
-        # Clean prices (excl. and incl. tax) and tax
+        # Clean prices and tax values
         if 'Price (excl. tax)' in product_details:
             product_details['Price (excl. tax)'] = clean_price(product_details['Price (excl. tax)'])
         if 'Price (incl. tax)' in product_details:
             product_details['Price (incl. tax)'] = clean_price(product_details['Price (incl. tax)'])
         if 'Tax' in product_details:
-            product_details['Tax'] = clean_price(product_details['Tax'])  # Clean the Tax value
+            product_details['Tax'] = clean_price(product_details['Tax'])
 
         return product_details
     else:
@@ -86,40 +77,38 @@ def get_books_info():
     html_content, status = fetch_html(url)
 
     if html_content and status == "Success":
-        # Parse the HTML content using BeautifulSoup
         soup = BeautifulSoup(html_content, 'html.parser')
-
-        # Find all book items (they are in <article class="product_pod">)
         books = soup.find_all('article', class_='product_pod')
 
-        # Loop over all books and extract name, price, and link
+        # Loop over all books, serialize and deserialize book data
         for book in books:
-            # Extract the name of the book (in <h3> tag)
             name = book.h3.a['title']
-
-            # Extract the price of the book (in <p class="price_color">)
             price = book.find('p', class_='price_color').text
-
-            # Extract the product link (inside the <a> tag, needs to be appended to the base URL)
             product_link = book.h3.a['href']
             full_product_link = url + product_link
 
-            # Add the book's info to the list
             book_data = {
                 'name': name,
                 'price': price,
                 'link': full_product_link
             }
 
-            # Clean and validate the book data
             cleaned_book_data = clean_book_data(book_data)
-
-            # Scrape additional details from the product page
             product_details = get_product_details(cleaned_book_data['link'])
-            cleaned_book_data.update(product_details)  # Merge the detailed info into the book data
+            cleaned_book_data.update(product_details)
 
-            # Display the book info immediately after processing
-            display_book_info(cleaned_book_data)
+            # Serialize the book data using CustomSerializer
+            serialized_data = CustomSerializer.serialize(cleaned_book_data)
+            print("Serialized Book Data:")
+            print(serialized_data)
+
+            # Deserialize the book data back to a Python dictionary
+            deserialized_data = CustomSerializer.deserialize(serialized_data)
+            print("\nDeserialized Book Data:")
+            print(deserialized_data)
+
+            # Display the book info
+            display_book_info(deserialized_data)
 
     else:
         print(f"Failed to fetch the website content: {status}")
