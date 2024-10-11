@@ -1,81 +1,159 @@
 import requests
 from bs4 import BeautifulSoup
+import re
+
+# Import fetch_html from ex1.py
 from ex1 import fetch_html
-from ex2 import extract_product_info
 
 
-def fetch_additional_data(product_url):
+def clean_price(price_str):
     """
-    Fetches additional data (e.g., specifications) from the product's individual page.
+    Cleans a price string by removing the currency symbol and converting it to a float.
 
     Parameters:
-    product_url (str): The URL of the product page to scrape.
+    price_str (str): The price string to clean.
 
     Returns:
-    dict: A dictionary with additional product details (e.g., battery capacity, memory, RAM, etc.).
+    float: The cleaned price as a float.
     """
-    response = requests.get(product_url)
+    # Remove any non-numeric characters except for the decimal point
+    cleaned_price = re.sub(r'[^\d.]', '', price_str)
+    return float(cleaned_price)
 
-    if response.status_code == 200:
-        product_page = response.text
-        soup = BeautifulSoup(product_page, 'html.parser')
 
-        # Find the promo-text div where product specifications are located
-        promo_text_div = soup.find('div', class_='promo-text')
+def clean_book_data(book_data):
+    """
+    Cleans and validates the book data.
 
-        if promo_text_div:
-            # Create a dictionary to store product specifications
-            product_specs = {}
+    Parameters:
+    book_data (dict): A dictionary with book's name, price, and link.
 
-            # Find all table rows in the promo-text div
-            for row in promo_text_div.find_all('tr'):
-                columns = row.find_all('td')
-                if len(columns) == 2:
-                    spec_name = columns[0].text.strip()
-                    spec_value = columns[1].find('b').text.strip()
-                    product_specs[spec_name] = spec_value
+    Returns:
+    dict: A cleaned dictionary with whitespaces removed and price as a float.
+    """
+    # Remove whitespaces from the name
+    book_data['name'] = book_data['name'].strip()
 
-            return product_specs
-        else:
-            return {}
+    # Ensure price is a float by cleaning it
+    book_data['price'] = clean_price(book_data['price'])
+
+    return book_data
+
+
+def get_product_details(product_url):
+    """
+    Extracts detailed product information from the product page.
+
+    Parameters:
+    product_url (str): The URL of the product page.
+
+    Returns:
+    dict: A dictionary with the detailed product information (UPC, tax, availability, etc.).
+    """
+    product_html, status = fetch_html(product_url)
+
+    if product_html and status == "Success":
+        soup = BeautifulSoup(product_html, 'html.parser')
+
+        # Find the table with class "table table-striped"
+        product_table = soup.find('table', class_='table table-striped')
+
+        product_details = {}
+
+        # Extract data from the table
+        if product_table:
+            rows = product_table.find_all('tr')
+            for row in rows:
+                th = row.find('th').text.strip()
+                td = row.find('td').text.strip()
+                product_details[th] = td
+
+        # Clean prices (excl. and incl. tax) and tax
+        if 'Price (excl. tax)' in product_details:
+            product_details['Price (excl. tax)'] = clean_price(product_details['Price (excl. tax)'])
+        if 'Price (incl. tax)' in product_details:
+            product_details['Price (incl. tax)'] = clean_price(product_details['Price (incl. tax)'])
+        if 'Tax' in product_details:
+            product_details['Tax'] = clean_price(product_details['Tax'])  # Clean the Tax value
+
+        return product_details
     else:
-        print(f"Failed to retrieve additional data from {product_url}")
         return {}
 
 
-if __name__ == "__main__":
-    # URL for the products page
-    url = "https://enter.online/telefoane/smartphone-uri"
-
-    # Fetch the HTML content using the function from ex1.py
+def get_books_info():
+    url = "http://books.toscrape.com/"
     html_content, status = fetch_html(url)
 
     if html_content and status == "Success":
-        # Extract product names, prices, and links
-        product_list = extract_product_info(html_content)
+        # Parse the HTML content using BeautifulSoup
+        soup = BeautifulSoup(html_content, 'html.parser')
 
-        if product_list:
-            # Display the extracted product info and fetch additional details
-            for product in product_list:
-                print(f"Product Name: {product['name']}")
-                print(f"New Price: {product['price_new']}")
-                if product['price_old']:
-                    print(f"Old Price: {product['price_old']}")
-                if product['discount']:
-                    print(f"Discount: {product['discount']}")
-                if product['link']:
-                    print(f"Link: {product['link']}")
+        # Find all book items (they are in <article class="product_pod">)
+        books = soup.find_all('article', class_='product_pod')
 
-                    # Fetch and display additional product details from the product page
-                    additional_data = fetch_additional_data(product['link'])
-                    if additional_data:
-                        print("Additional Product Information:")
-                        for spec_name, spec_value in additional_data.items():
-                            print(f"{spec_name}: {spec_value}")
-                    else:
-                        print("No additional product information found.")
-                print("-" * 40)
-        else:
-            print("No products found.")
+        # Loop over all books and extract name, price, and link
+        for book in books:
+            # Extract the name of the book (in <h3> tag)
+            name = book.h3.a['title']
+
+            # Extract the price of the book (in <p class="price_color">)
+            price = book.find('p', class_='price_color').text
+
+            # Extract the product link (inside the <a> tag, needs to be appended to the base URL)
+            product_link = book.h3.a['href']
+            full_product_link = url + product_link
+
+            # Add the book's info to the list
+            book_data = {
+                'name': name,
+                'price': price,
+                'link': full_product_link
+            }
+
+            # Clean and validate the book data
+            cleaned_book_data = clean_book_data(book_data)
+
+            # Scrape additional details from the product page
+            product_details = get_product_details(cleaned_book_data['link'])
+            cleaned_book_data.update(product_details)  # Merge the detailed info into the book data
+
+            # Display the book info immediately after processing
+            display_book_info(cleaned_book_data)
+
     else:
-        print(f"Failed to retrieve content: {status}")
+        print(f"Failed to fetch the website content: {status}")
+
+
+def display_book_info(book):
+    """
+    Displays a single book's information in a nicely formatted way.
+
+    Parameters:
+    book (dict): Dictionary containing book info.
+    """
+    print(f"Name: {book['name']}")
+    print(f"Price: {book['price']}")
+    print(f"Link: {book['link']}")
+
+    # Print detailed information if available
+    if 'UPC' in book:
+        print(f"UPC: {book['UPC']}")
+    if 'Product Type' in book:
+        print(f"Product Type: {book['Product Type']}")
+    if 'Price (excl. tax)' in book:
+        print(f"Price (excl. tax): {book['Price (excl. tax)']}")
+    if 'Price (incl. tax)' in book:
+        print(f"Price (incl. tax): {book['Price (incl. tax)']}")
+    if 'Tax' in book:
+        print(f"Tax: {book['Tax']}")
+    if 'Availability' in book:
+        print(f"Availability: {book['Availability']}")
+    if 'Number of reviews' in book:
+        print(f"Number of Reviews: {book['Number of reviews']}")
+
+    print("=" * 60)  # Separator line between books
+
+
+# Start scraping and displaying books info
+get_books_info()

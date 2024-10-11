@@ -23,3 +23,6 @@ def fetch_html(url):
     except requests.RequestException as e:
         # Handle connection issues or request errors
         return None, f"Request failed due to an error: {str(e)}"
+
+
+# print(fetch_html("http://books.toscrape.com"))

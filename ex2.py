@@ -1,90 +1,97 @@
 from bs4 import BeautifulSoup
-
-
-def clean_price(price_str):
-    """
-    Cleans the price string by removing non-numeric characters and converts it to an integer.
-
-    Parameters:
-    price_str (str): The price string to clean.
-
-    Returns:
-    int: The cleaned price as an integer.
-    """
-    # Remove all non-numeric characters
-    price_str = ''.join([ch for ch in price_str if ch.isdigit()])
-    return int(price_str) if price_str else 0
-
-
-def extract_product_info(html_content):
-    """
-    Extracts and cleans product names, prices, and links from the given HTML content.
-
-    Parameters:
-    html_content (str): The HTML content to parse.
-
-    Returns:
-    list: A list of dictionaries with cleaned and validated product names, prices, and links.
-    """
-    soup = BeautifulSoup(html_content, 'html.parser')
-    products = []
-
-    # Find product items based on the structure
-    for product in soup.find_all('div', class_='grid-item'):
-        name_tag = product.find('span', class_='product-title')  # Product name
-        price_new_tag = product.find('span', class_='price-new')  # New price
-        price_old_tag = product.find('span', class_='price-old')  # Old price (optional)
-        discount_tag = product.find('span', class_='discount')  # Discount (optional)
-        link_tag = product.find('a', href=True)  # Product link
-
-        # Extract name, prices, and link if available
-        if name_tag and price_new_tag and link_tag:
-            name = name_tag.text.strip()  # Clean name (remove extra spaces)
-            price_new = clean_price(price_new_tag.text)  # Clean new price and convert to integer
-            price_old = clean_price(price_old_tag.text) if price_old_tag else None  # Clean old price
-            discount = discount_tag.text.strip() if discount_tag else None  # Clean discount
-            link = link_tag['href']  # Extract the link
-
-            # Store cleaned product info in a dictionary
-            product_info = {
-                'name': name,
-                'price_new': price_new,
-                'price_old': price_old,
-                'discount': discount,
-                'link': link
-            }
-
-            products.append(product_info)
-
-    return products
-
-
-
-# URL for the products page
-url = "https://enter.online/telefoane/smartphone-uri"
-
-# Fetch the HTML content using the function from ex1.py
+import re
+from ex6 import retrieve_page_body
 from ex1 import fetch_html
 
-html_content, status = fetch_html(url)
 
-if html_content and status == "Success":
-    # Extract product names and prices
-    product_list = extract_product_info(html_content)
+def clean_book_data(book_data):
+    """
+    Cleans and validates the book data.
 
-    if product_list:
-        # Display the extracted product info
-        for product in product_list:
-            print(f"Product Name: {product['name']}")
-            print(f"New Price: {product['price_new']}")
-            if product['price_old']:
-                print(f"Old Price: {product['price_old']}")
-            if product['discount']:
-                print(f"Discount: {product['discount']}")
-            if product['link']:
-                print(f"Link: {product['link']}")
-            print("-" * 40)
+    Parameters:
+    book_data (dict): A dictionary with book's name, price, and link.
+
+    Returns:
+    dict: A cleaned dictionary with whitespaces removed and price as a float.
+    """
+    # Remove whitespaces from the name
+    book_data['name'] = book_data['name'].strip()
+
+    # Ensure price is a float by stripping non-numeric characters (e.g., £ sign)
+    price_str = re.sub(r'[^\d.]', '', book_data['price'])  # Remove non-numeric characters
+    book_data['price'] = float(price_str)  # Convert to float
+
+    return book_data
+
+
+def get_books_info():
+    # Use socket-based HTTP request to get the HTML content
+    host = "books.toscrape.com"
+    port = 80
+    path = "/"
+
+    # Fetch the page content using sockets
+    html_content = retrieve_page_body(host, port, path)
+    # html_content, status = fetch_html("https://books.toscrape.com/")
+
+    if html_content:
+        # Parse the HTML content using BeautifulSoup
+        soup = BeautifulSoup(html_content, 'html.parser')
+
+        # Find all book items (they are in <article class="product_pod">)
+        books = soup.find_all('article', class_='product_pod')
+
+        books_info = []
+
+        # Loop over all books and extract name, price, and link
+        for book in books:
+            # Extract the name of the book (in <h3> tag)
+            name = book.h3.a['title']
+
+            # Extract the price of the book (in <p class="price_color">)
+            price = book.find('p', class_='price_color').text
+
+            # Extract the product link (inside the <a> tag, needs to be appended to the base URL)
+            product_link = book.h3.a['href']
+            full_product_link = f"http://{host}/{product_link}"
+
+            # Add the book's info to the list
+            book_data = {
+                'name': name,
+                'price': price,
+                'link': full_product_link
+            }
+
+            # Clean and validate the book data
+            cleaned_book_data = clean_book_data(book_data)
+            books_info.append(cleaned_book_data)
+
+        return books_info
     else:
-        print("No products found.")
-else:
-    print(f"Failed to retrieve content: {status}")
+        print("Failed to fetch the website content.")
+        return []
+
+
+def display_books_info(books_info):
+    """
+    Displays the books information in a nicely formatted way.
+
+    Parameters:
+    books_info (list): List of dictionaries containing book info.
+    """
+    # Display each book's information
+    for book in books_info:
+        name = book['name']
+        price = book['price']
+        link = book['link']
+
+        # Print each book's information on a new line with a separator
+        print(f"Name: {name}\nPrice: {price}\nLink: {link}\n")
+        print("=" * 60)  # Separator line between books
+
+
+# Get book info
+book_info = get_books_info()
+
+# Display book info in a more beautiful and structured way
+display_books_info(book_info)
