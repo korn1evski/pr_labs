@@ -1,131 +1,90 @@
-import requests
-from bs4 import BeautifulSoup
 import re
-from ex1 import fetch_html  # Import fetch_html from ex1.py
-from ex8 import CustomSerializer  # Import CustomSerializer from ex8.py
+from ex1 import fetch_html
+from ex8 import CustomSerializer
+from bs4 import BeautifulSoup
+import requests
+import base64
+import json
 
+# Server URL
+upload_url = "http://localhost:8000/upload"
+
+# Credentials for basic authentication
+username = "301"
+password = "307"
+credentials = f"{username}:{password}"
+encoded_credentials = base64.b64encode(credentials.encode()).decode()
+
+# Common Headers for Authorization
+auth_header = {
+    "Authorization": f"Basic {encoded_credentials}"
+}
 
 def clean_price(price_str):
-    """
-    Cleans a price string by removing the currency symbol and converting it to a float.
-
-    Parameters:
-    price_str (str): The price string to clean.
-
-    Returns:
-    float: The cleaned price as a float.
-    """
-    cleaned_price = re.sub(r'[^\d.]', '', price_str)  # Remove any non-numeric characters except for the decimal point
+    cleaned_price = re.sub(r'[^\d.]', '', price_str)
     return float(cleaned_price)
 
-
 def clean_book_data(book_data):
-    """
-    Cleans and validates the book data.
-
-    Parameters:
-    book_data (dict): A dictionary with book's name, price, and link.
-
-    Returns:
-    dict: A cleaned dictionary with whitespaces removed and price as a float.
-    """
     book_data['name'] = book_data['name'].strip()
-    book_data['price'] = clean_price(book_data['price'])  # Ensure price is a float by cleaning it
+    book_data['price'] = clean_price(book_data['price'])
     return book_data
 
-
 def get_product_details(product_url):
-    """
-    Extracts detailed product information from the product page.
-
-    Parameters:
-    product_url (str): The URL of the product page.
-
-    Returns:
-    dict: A dictionary with the detailed product information (UPC, tax, availability, etc.).
-    """
     product_html, status = fetch_html(product_url)
-
     if product_html and status == "Success":
         soup = BeautifulSoup(product_html, 'html.parser')
-
         product_table = soup.find('table', class_='table table-striped')
         product_details = {}
-
         if product_table:
             rows = product_table.find_all('tr')
             for row in rows:
                 th = row.find('th').text.strip()
                 td = row.find('td').text.strip()
                 product_details[th] = td
-
-        # Clean prices and tax values
         if 'Price (excl. tax)' in product_details:
             product_details['Price (excl. tax)'] = clean_price(product_details['Price (excl. tax)'])
         if 'Price (incl. tax)' in product_details:
             product_details['Price (incl. tax)'] = clean_price(product_details['Price (incl. tax)'])
         if 'Tax' in product_details:
             product_details['Tax'] = clean_price(product_details['Tax'])
-
         return product_details
     else:
         return {}
 
-
 def get_books_info():
     url = "http://books.toscrape.com/"
     html_content, status = fetch_html(url)
+    all_serialized_books = []
 
     if html_content and status == "Success":
         soup = BeautifulSoup(html_content, 'html.parser')
         books = soup.find_all('article', class_='product_pod')
-
-        # Loop over all books, serialize and deserialize book data
         for book in books:
             name = book.h3.a['title']
             price = book.find('p', class_='price_color').text
             product_link = book.h3.a['href']
             full_product_link = url + product_link
-
             book_data = {
                 'name': name,
                 'price': price,
                 'link': full_product_link
             }
-
             cleaned_book_data = clean_book_data(book_data)
             product_details = get_product_details(cleaned_book_data['link'])
             cleaned_book_data.update(product_details)
-
-            # Serialize the book data using CustomSerializer
             serialized_data = CustomSerializer.serialize(cleaned_book_data)
-            print("Serialized Book Data:")
-            print(serialized_data)
-
-            # Deserialize the book data back to a Python dictionary
+            all_serialized_books.append(serialized_data)
             deserialized_data = CustomSerializer.deserialize(serialized_data)
-            print("\nDeserialized Book Data:")
-            print(deserialized_data)
-
-            # Display the book info
             display_book_info(deserialized_data)
-
+            print("=" * 60)
+        send_data_to_server(all_serialized_books)
     else:
         print(f"Failed to fetch the website content: {status}")
 
-
 def display_book_info(book):
-    """
-    Displays a single book's information in a nicely formatted way.
-
-    Parameters:
-    book (dict): Dictionary containing book info.
-    """
     print(f"Name: {book['name']}")
     print(f"Price: {book['price']}")
     print(f"Link: {book['link']}")
-
-    # Print detailed information if available
     if 'UPC' in book:
         print(f"UPC: {book['UPC']}")
     if 'Product Type' in book:
@@ -141,8 +100,27 @@ def display_book_info(book):
     if 'Number of reviews' in book:
         print(f"Number of Reviews: {book['Number of reviews']}")
 
-    print("=" * 60)  # Separator line between books
+def send_data_to_server(all_serialized_books):
+    deserialized_books = [CustomSerializer.deserialize(book) for book in all_serialized_books]
+    json_data = json.dumps(deserialized_books)
+    headers_json = {
+        **auth_header,
+        "Content-Type": "application/json"
+    }
+    response_json = requests.post(upload_url, headers=headers_json, data=json_data)
+    print("\nJSON Response Status Code:", response_json.status_code)
+    print("JSON Response Body:", response_json.text)
 
+    xml_data = "<books>" + "".join([CustomSerializer.serialize(book) for book in deserialized_books]) + "</books>"
+    headers_xml = {
+        **auth_header,
+        "Content-Type": "application/xml"
+    }
+    response_xml = requests.post(upload_url, headers=headers_xml, data=xml_data)
+    print("\nXML Response Status Code:", response_xml.status_code)
+    print("XML Response Body:", response_xml.text)
 
-# Start scraping and displaying books info
-get_books_info()
+def main():
+    get_books_info()
+
+main()
