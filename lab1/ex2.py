@@ -13,8 +13,8 @@ def get_books_info():
     host = "books.toscrape.com"
     port = 80
     path = "/"
-    # html_content = retrieve_page_body(host, port, path)
-    html_content, status= fetch_html("https://books.toscrape.com/")
+    html_content = retrieve_page_body(host, port, path)
+    # html_content, status= fetch_html("https://books.toscrape.com/")
 
     if html_content:
         soup = BeautifulSoup(html_content, 'html.parser')
