@@ -1,0 +1,31 @@
+version: '3.8'
+services:
+  postgres-lab-2:
+    container_name: postgres_lab_2
+    image: postgres:16
+    environment:
+      POSTGRES_DB: my_lab2
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      PGDATA: /data/postgres
+    expose:
+      - "5432"
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres-lab:/data/postgres
+    restart: always
+
+  flask_app:
+    container_name: flask_app_container
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5001:5000"
+    depends_on:
+      - postgres-lab-2
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres-lab-2:5432/my_lab2
+    restart: always
