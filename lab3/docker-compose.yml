@@ -1,0 +1,104 @@
+version: '3.8'
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - project_net
+
+  postgres-lab-2:
+    image: postgres:16
+    container_name: postgres_lab_2
+    environment:
+      POSTGRES_DB: my_lab2
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    networks:
+      - project_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 5
+
+  lab2_webserver:
+    build: ./lab2
+    container_name: lab2_webserver
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres_lab_2:5432/my_lab2
+    depends_on:
+      postgres-lab-2:
+        condition: service_healthy
+    ports:
+      - "5001:5000"
+    networks:
+      - project_net
+
+  ftp_server:
+    image: fauria/vsftpd
+    container_name: ftp_server
+    environment:
+      FTP_USER: ftpuser
+      FTP_PASS: ftppass
+      PASV_ADDRESS: "0.0.0.0"
+    ports:
+      - "21:21"
+    networks:
+      - project_net
+
+  manager_node_1:
+    build: ./lab3
+    container_name: manager_node_1
+    environment:
+      RAFT_NODE_ID: 0
+      RAFT_PEERS: "manager_node_1:5005;manager_node_2:5006"
+      RABBITMQ_HOST: rabbitmq
+      LAB2_HOST: lab2_webserver
+      FTP_HOST: ftp_server
+    depends_on:
+      - rabbitmq
+      - lab2_webserver
+      - ftp_server
+    networks:
+      - project_net
+    ports:
+      - "5005:5005"
+
+  manager_node_2:
+    build: ./lab3
+    container_name: manager_node_2
+    environment:
+      RAFT_NODE_ID: 1
+      RAFT_PEERS: "manager_node_1:5005;manager_node_2:5006"
+      RABBITMQ_HOST: rabbitmq
+      LAB2_HOST: lab2_webserver
+      FTP_HOST: ftp_server
+    depends_on:
+      - rabbitmq
+      - lab2_webserver
+      - ftp_server
+    networks:
+      - project_net
+    ports:
+      - "5006:5006"
+
+  scraper:
+    build: ./lab1
+    container_name: scraper
+    environment:
+      RABBITMQ_HOST: rabbitmq
+    depends_on:
+      - rabbitmq
+    networks:
+      - project_net
+
+networks:
+  project_net:
+    driver: bridge
