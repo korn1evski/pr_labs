@@ -15,6 +15,8 @@ def consume_messages():
         if body:
             print("Consuming body:", body)
             book_data = json.loads(body)
+            del book_data["link"]
+            print(book_data)
             response = requests.post(f"http://{LAB2_HOST}:5000/books", data=book_data)
             print("Posted to LAB2:", response.text)
             channel.basic_ack(delivery_tag=method.delivery_tag)

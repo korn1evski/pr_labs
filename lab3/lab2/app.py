@@ -40,23 +40,25 @@ def create_book():
     except ValueError:
         return jsonify({"error": "Price must be a valid number"}), 400
 
+    # Remove file handling if not needed
     file = request.files.get('file')
 
     # Check if book with same name and author exists
     if db.query(Book).filter_by(name=name, author=author).first():
         return jsonify({"error": "Book with the same name and author already exists"}), 400
 
-    # Handle the uploaded file if present
+    # Handle the uploaded file if present (if you still want to handle file separately)
     file_path = None
     if file:
         file_path = os.path.join(UPLOAD_FOLDER, file.filename)
         file.save(file_path)
 
+    # Now, exclude 'file_path' from Book creation since it is no longer needed
     new_book = Book(
         name=name,
         author=author,
         price=price,
-        file_path=file_path
+        link=data.get('link', ''),  # If link is provided, else an empty string
     )
 
     db.add(new_book)
@@ -67,8 +69,9 @@ def create_book():
         "name": new_book.name,
         "author": new_book.author,
         "price": new_book.price,
-        "file_path": new_book.file_path
+        "link": new_book.link  # Exclude file_path
     }}), 201
+
 
 # Read all books with pagination
 @app.route('/books', methods=['GET'])
@@ -78,15 +81,17 @@ def get_books():
     limit = request.args.get('limit', default=5, type=int)
 
     books = db.query(Book).offset(offset).limit(limit).all()
+
     result = [{
         "id": book.id,
         "name": book.name,
         "author": book.author,
         "price": book.price,
-        "file_path": book.file_path
+        "link": book.link  # Exclude file_path from the result
     } for book in books]
 
     return jsonify(result)
+
 
 # Update a book
 @app.route('/books/<int:book_id>', methods=['PUT'])

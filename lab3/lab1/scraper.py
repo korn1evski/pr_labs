@@ -60,7 +60,7 @@ def publish_books_to_rabbitmq(books_info):
     for book in books_info:
         message = json.dumps(book)
         try:
-            channel.basic_publish(exchange='', routing_key='your_queue_name', body=message)
+            channel.basic_publish(exchange='', routing_key='books_queue', body=message)
             print(f"Published: {message}")
         except Exception as e:
             print(f"Failed to publish message: {e}")
